@@ -3,9 +3,23 @@ import multer from 'multer';
 import fs from 'fs';
 import axios from 'axios';
 import { PDFDocument } from 'pdf-lib';
+import path from 'path';
 
 const app = express();
 const upload = multer({ dest: 'uploads/' });
+
+async function embedImageFromUrl(pdfDoc, imageUrl) {
+  const response = await axios.get(imageUrl, { responseType: 'arraybuffer' });
+  const contentType = response.headers['content-type'];
+
+  if (contentType.includes('jpeg') || contentType.includes('jpg')) {
+    return await pdfDoc.embedJpg(response.data);
+  } else if (contentType.includes('png')) {
+    return await pdfDoc.embedPng(response.data);
+  } else {
+    throw new Error('Unsupported image type: ' + contentType);
+  }
+}
 
 app.post('/sign-pdf', upload.fields([{ name: 'pdf', maxCount: 1 }]), async (req, res) => {
   try {
@@ -23,12 +37,10 @@ app.post('/sign-pdf', upload.fields([{ name: 'pdf', maxCount: 1 }]), async (req,
     const lastPage = pages[pages.length - 1];
     const { width, height } = lastPage.getSize();
 
-    // Add customer signature from URL
+    // Customer signature
     if (customerSignatureUrl) {
-      const customerResponse = await axios.get(customerSignatureUrl, { responseType: 'arraybuffer' });
-      const customerSignatureImage = await pdfDoc.embedPng(customerResponse.data);
+      const customerSignatureImage = await embedImageFromUrl(pdfDoc, customerSignatureUrl);
       const customerDims = customerSignatureImage.scale(0.2);
-
       lastPage.drawImage(customerSignatureImage, {
         x: width - customerDims.width - 50,
         y: 50,
@@ -37,12 +49,10 @@ app.post('/sign-pdf', upload.fields([{ name: 'pdf', maxCount: 1 }]), async (req,
       });
     }
 
-    // Add company signature from URL
+    // Company signature
     if (companySignatureUrl) {
-      const companyResponse = await axios.get(companySignatureUrl, { responseType: 'arraybuffer' });
-      const companySignatureImage = await pdfDoc.embedPng(companyResponse.data);
+      const companySignatureImage = await embedImageFromUrl(pdfDoc, companySignatureUrl);
       const companyDims = companySignatureImage.scale(0.2);
-
       lastPage.drawImage(companySignatureImage, {
         x: width - companyDims.width - 50,
         y: 50 + 80,
