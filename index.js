@@ -7,9 +7,13 @@ import { PDFDocument } from 'pdf-lib';
 const app = express();
 const upload = multer({ dest: 'uploads/' });
 
-app.post('/sign-pdf', upload.single('pdf'), async (req, res) => {
+app.post('/sign-pdf', upload.fields([{ name: 'pdf', maxCount: 1 }]), async (req, res) => {
   try {
-    const pdfPath = req.file.path;
+    if (!req.files || !req.files['pdf']) {
+      return res.status(400).send('PDF file is missing');
+    }
+
+    const pdfPath = req.files['pdf'][0].path;
     const customerSignatureUrl = req.body.customerSignatureUrl;
     const companySignatureUrl = req.body.companySignatureUrl;
 
