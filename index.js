@@ -1,14 +1,17 @@
 import express from 'express';
 import axios from 'axios';
-import fs from 'fs';
 import { PDFDocument } from 'pdf-lib';
 
 const app = express();
-app.use(express.json()); // To parse JSON bodies
+
+// Middleware per leggere JSON e form-urlencoded
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 
 async function embedImageFromUrl(pdfDoc, imageUrl) {
   const response = await axios.get(imageUrl, { responseType: 'arraybuffer' });
   const contentType = response.headers['content-type'];
+
   if (contentType.includes('jpeg') || contentType.includes('jpg')) {
     return await pdfDoc.embedJpg(response.data);
   } else if (contentType.includes('png')) {
@@ -20,6 +23,8 @@ async function embedImageFromUrl(pdfDoc, imageUrl) {
 
 app.post('/sign-pdf', async (req, res) => {
   try {
+    console.log('Request body:', req.body);
+
     const {
       pdfUrl,
       customerSignatureUrl,
@@ -32,7 +37,7 @@ app.post('/sign-pdf', async (req, res) => {
 
     if (!pdfUrl) return res.status(400).send('pdfUrl is required');
 
-    // Download PDF
+    // Scarica PDF
     const pdfResponse = await axios.get(pdfUrl, { responseType: 'arraybuffer' });
     const pdfDoc = await PDFDocument.load(pdfResponse.data);
 
@@ -40,7 +45,7 @@ app.post('/sign-pdf', async (req, res) => {
     const lastPage = pages[pages.length - 1];
     const { width, height } = lastPage.getSize();
 
-    // Add customer signature image
+    // Firma cliente
     if (customerSignatureUrl) {
       const customerSignatureImage = await embedImageFromUrl(pdfDoc, customerSignatureUrl);
       const w = parseFloat(customerSignatureWidth) || (customerSignatureImage.width * 0.2);
@@ -54,7 +59,7 @@ app.post('/sign-pdf', async (req, res) => {
       });
     }
 
-    // Add company signature image
+    // Firma aziendale
     if (companySignatureUrl) {
       const companySignatureImage = await embedImageFromUrl(pdfDoc, companySignatureUrl);
       const w = parseFloat(companySignatureWidth) || (companySignatureImage.width * 0.2);
@@ -76,7 +81,7 @@ app.post('/sign-pdf', async (req, res) => {
 
   } catch (error) {
     console.error('Error:', error);
-    res.status(500).send('Error signing PDF');
+    res.status(500).send({ error: error.message || 'Error signing PDF' });
   }
 });
 
